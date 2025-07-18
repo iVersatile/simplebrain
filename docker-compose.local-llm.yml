@@ -1,0 +1,106 @@
+services:
+  local-llm:
+    build:
+      context: .
+      dockerfile: Dockerfile.local-llm
+    container_name: local_llm_agent
+    
+    # Security: Run as non-root user
+    user: "1000:1000"
+    
+    # Security: Drop all capabilities except needed ones
+    cap_drop:
+      - ALL
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    
+    # Security: Temporary filesystems for writable areas
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=300m
+      - /var/tmp:rw,noexec,nosuid,size=100m
+      - /home/llmuser/.cache:rw,noexec,nosuid,size=200m
+    
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 6G
+          pids: 300
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    
+    # Security: Custom network
+    networks:
+      - llm-network
+    
+    # Expose Flask API port
+    ports:
+      - "5001:5000"
+    
+    # Security: Specific volume mounts with restrictions
+    volumes:
+      # Workspace for development
+      - type: bind
+        source: ./workspace
+        target: /app/workspace
+        read_only: false
+      # Model files
+      - type: bind
+        source: ./models
+        target: /app/models
+        read_only: true
+      # Local agent app
+      - type: bind
+        source: ./local_agent_workspace
+        target: /app/local_agent
+        read_only: false
+    
+    # Security: Environment variables (no sensitive data)
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/models/model.gguf
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+    
+    # Security: No privileged mode
+    privileged: false
+    
+    # Security: Set hostname
+    hostname: local-llm
+    
+    # Security: Restart policy
+    restart: unless-stopped
+    
+    # Security: Logging limits
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    
+    # Simple command - no virtual display needed
+    command: >
+      bash -c "
+        tail -f /dev/null
+      "
+
+# Security: Custom network with isolation
+networks:
+  llm-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.0.0/16

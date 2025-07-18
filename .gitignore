@@ -1,0 +1,9 @@
+# Large model files
+*.gguf
+*.tar.gz
+*.log
+.DS_Store
+# Workspace build artifacts
+workspace/llama.cpp/build/
+workspace/llama.cpp.tar.gz
+workspace/.DS_Store
