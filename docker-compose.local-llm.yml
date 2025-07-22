@@ -16,8 +16,8 @@ services:
     security_opt:
       - no-new-privileges:true
     
-    # Security: Read-only root filesystem
-    read_only: true
+# Security: Read-only root filesystem (disabled temporarily for debugging)
+    # read_only: true
     
     # Security: Temporary filesystems for writable areas
     tmpfs:
@@ -87,10 +87,12 @@ services:
         max-size: "50m"
         max-file: "3"
     
-    # Simple command - no virtual display needed
+    # Start SimpleBrain with proper initialization
     command: >
       bash -c "
-        tail -f /dev/null
+        echo 'Starting SimpleBrain...';
+        chmod +x /app/startup.sh;
+        /app/startup.sh
       "
 
 # Security: Custom network with isolation

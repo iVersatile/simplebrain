@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Local LLM Showcase</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .chat-container { border: 1px solid #ddd; height: 400px; padding: 10px; overflow-y: auto; margin: 10px 0; }
+        .input-area { display: flex; gap: 10px; }
+        input[type="text"] { flex: 1; padding: 10px; }
+        button { padding: 10px 20px; background: #007AFF; color: white; border: none; cursor: pointer; }
+        .model-select { margin: 10px 0; }
+        .message { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .user { background: #E3F2FD; text-align: right; }
+        .assistant { background: #F5F5F5; }
+        .loading { color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>🤖 Local LLM Showcase</h1>
+    
+    <div class="model-select">
+        <label>Model: </label>
+        <select id="modelSelect">
+            <option value="5001">Phi3 (General)</option>
+            <option value="5002">Mistral (Coding)</option>
+        </select>
+        <span id="status">Ready</span>
+    </div>
+    
+    <div id="chatContainer" class="chat-container">
+        <div class="message assistant">👋 Select a model and start chatting!</div>
+    </div>
+    
+    <div class="input-area">
+        <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="clearChat()">Clear</button>
+        <button onclick="healthCheck()" style="background: #34C759;">Health Check</button>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const modelSelect = document.getElementById('modelSelect');
+        const status = document.getElementById('status');
+
+        function addMessage(content, isUser = false) {
+            const div = document.createElement('div');
+            div.className = `message ${isUser ? 'user' : 'assistant'}`;
+            div.textContent = content;
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            const port = modelSelect.value;
+            const modelName = modelSelect.options[modelSelect.selectedIndex].text;
+
+            addMessage(message, true);
+            messageInput.value = '';
+            status.textContent = `🤔 ${modelName} thinking...`;
+
+            try {
+                // Use the correct SimpleBrain endpoint
+                let response = null;
+                try {
+                    const res = await fetch(`http://localhost:${port}/api/agent`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: message })
+                    });
+                    
+                    if (res.ok) {
+                        response = await res.json();
+                    }
+                } catch (e) {
+                    console.error('Request failed:', e);
+                }
+
+                if (response) {
+                    const reply = response.llm_response || response.response || response.message || JSON.stringify(response);
+                    addMessage(reply);
+                    status.textContent = 'Ready';
+                } else {
+                    addMessage('❌ Could not connect to model. Check if the service is running.');
+                    status.textContent = 'Error';
+                }
+
+            } catch (error) {
+                addMessage(`❌ Error: ${error.message}`);
+                status.textContent = 'Error';
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') sendMessage();
+        }
+
+        function clearChat() {
+            chatContainer.innerHTML = '<div class="message assistant">👋 Chat cleared! Ready for new conversation.</div>';
+        }
+
+        async function healthCheck() {
+            status.textContent = '🔍 Checking health...';
+            addMessage('🔍 Running health check on both models...', false);
+            
+            const models = [
+                { port: '5001', name: 'Phi3 (General)' },
+                { port: '5002', name: 'Mistral (Coding)' }
+            ];
+            
+            let results = [];
+            
+            for (const model of models) {
+                try {
+                    const startTime = Date.now();
+                    const res = await fetch(`http://localhost:${model.port}/health`, {
+                        method: 'GET',
+                        timeout: 5000
+                    });
+                    const endTime = Date.now();
+                    const responseTime = endTime - startTime;
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        results.push(`✅ ${model.name}: Healthy (${responseTime}ms)`);
+                        console.log(`${model.name} health:`, data);
+                    } else {
+                        results.push(`⚠️ ${model.name}: HTTP ${res.status}`);
+                    }
+                } catch (error) {
+                    results.push(`❌ ${model.name}: Connection failed - ${error.message}`);
+                }
+            }
+            
+            results.forEach(result => addMessage(result, false));
+            status.textContent = 'Health check complete';
+        }
+
+        // Test connection on load
+        window.onload = async function() {
+            status.textContent = 'Testing connections...';
+            await healthCheck();
+            status.textContent = 'Ready';
+        };
+    </script>
+</body>
+</html>

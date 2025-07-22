@@ -4,6 +4,23 @@
 *.log
 .DS_Store
 # Workspace build artifacts
-workspace/llama.cpp/build/
-workspace/llama.cpp.tar.gz
-workspace/.DS_Store
+workspace/
+instances/*/workspace/
+**/workspace/llama.cpp/build/
+**/workspace/llama.cpp.tar.gz
+**/workspace/llama-built.tar.gz
+**/workspace/.DS_Store
+workspace/projects/
+
+# Compiled binaries and symlinks (build artifacts)
+**/main
+**/llama-*
+workspace/projects/llama.cpp/main
+
+# Large model files (use symlinks from root models/)
+instances/*/models/*.gguf
+
+# Allow tracking instance config and Flask apps (they are enhanced versions)
+# instances/ directories and files will be tracked
+# instances/*/local_agent_workspace/ will be tracked (enhanced Flask apps)
+# instances/*/models/ will be tracked (but not .gguf files)

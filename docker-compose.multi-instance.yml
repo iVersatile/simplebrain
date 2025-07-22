@@ -1,0 +1,308 @@
+# SimpleBrain Multi-Instance Docker Compose Configuration
+# Supports multiple LLM containers on the same host with proper isolation
+
+version: '3.8'
+
+services:
+  # Instance 1: General Purpose (Phi-3)
+  simplebrain-general-phi3:
+    build:
+      context: .
+      dockerfile: Dockerfile.local-llm
+      tags:
+        - "simplebrain-phi3:latest"
+        - "simplebrain-phi3:v1.0"
+    image: simplebrain-phi3:latest
+    container_name: simplebrain-general-phi3
+    
+    # Security: Run as non-root user
+    user: "1000:1000"
+    
+    # Security: Drop all capabilities
+    cap_drop:
+      - ALL
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    
+    # Security: Temporary filesystems
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=300m
+      - /var/tmp:rw,noexec,nosuid,size=100m
+      - /home/llmuser/.cache:rw,noexec,nosuid,size=200m
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+          pids: 200
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    
+    # Network isolation
+    networks:
+      - simplebrain-general-network
+    
+    # Port mapping - Instance 1
+    ports:
+      - "5001:5000"
+    
+    # Volume mounts with instance-specific paths
+    volumes:
+      # Instance-specific workspace
+      - type: bind
+        source: ./instances/general/workspace
+        target: /app/workspace
+        read_only: false
+      # Instance-specific models
+      - type: bind
+        source: ./instances/general/models
+        target: /app/models
+        read_only: true
+      # Instance-specific app
+      - type: bind
+        source: ./instances/general/local_agent_workspace
+        target: /app/local_agent
+        read_only: false
+    
+    # Instance-specific environment
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/models/phi3-mini-4k.gguf
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
+      - INSTANCE_NAME=general
+      - MODEL_TYPE=phi3
+      - API_PORT=5000
+    
+    # Security settings
+    privileged: false
+    hostname: simplebrain-general
+    restart: unless-stopped
+    
+    # Logging limits
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
+    
+    command: >
+      bash -c "
+        echo 'Starting SimpleBrain General Instance (Phi-3)...';
+        cd /app/local_agent && python3 app.py
+      "
+
+  # Instance 2: Coding Assistant (Mistral-7B)
+  simplebrain-coding-mistral:
+    build:
+      context: .
+      dockerfile: Dockerfile.local-llm
+      tags:
+        - "simplebrain-mistral:latest"
+        - "simplebrain-mistral:v1.0"
+    image: simplebrain-mistral:latest
+    container_name: simplebrain-coding-mistral
+    
+    # Security configuration (same as above)
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=300m
+      - /var/tmp:rw,noexec,nosuid,size=100m
+      - /home/llmuser/.cache:rw,noexec,nosuid,size=200m
+    
+    # Higher resources for coding tasks
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 6G
+          pids: 250
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    
+    # Separate network
+    networks:
+      - simplebrain-coding-network
+    
+    # Port mapping - Instance 2
+    ports:
+      - "5002:5000"
+    
+    # Instance-specific volumes
+    volumes:
+      - type: bind
+        source: ./instances/coding/workspace
+        target: /app/workspace
+        read_only: false
+      - type: bind
+        source: ./instances/coding/models
+        target: /app/models
+        read_only: true
+      - type: bind
+        source: ./instances/coding/local_agent_workspace
+        target: /app/local_agent
+        read_only: false
+    
+    # Coding-optimized environment
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/models/mistral-7b.gguf
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
+      - INSTANCE_NAME=coding
+      - MODEL_TYPE=mistral
+      - API_PORT=5000
+    
+    privileged: false
+    hostname: simplebrain-coding
+    restart: unless-stopped
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
+    
+    command: >
+      bash -c "
+        echo 'Starting SimpleBrain Coding Instance (Mistral-7B)...';
+        cd /app/local_agent && python3 app.py
+      "
+
+  # Instance 3: Conversational (Llama-3-8B)
+  simplebrain-chat-llama3:
+    build:
+      context: .
+      dockerfile: Dockerfile.local-llm
+      tags:
+        - "simplebrain-llama3:latest"
+        - "simplebrain-llama3:v1.0"
+    image: simplebrain-llama3:latest
+    container_name: simplebrain-chat-llama3
+    
+    # Security configuration
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=300m
+      - /var/tmp:rw,noexec,nosuid,size=100m
+      - /home/llmuser/.cache:rw,noexec,nosuid,size=200m
+    
+    # Maximum resources for best conversation quality
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+          pids: 300
+        reservations:
+          cpus: '1.5'
+          memory: 3G
+    
+    networks:
+      - simplebrain-chat-network
+    
+    # Port mapping - Instance 3
+    ports:
+      - "5003:5000"
+    
+    volumes:
+      - type: bind
+        source: ./instances/chat/workspace
+        target: /app/workspace
+        read_only: false
+      - type: bind
+        source: ./instances/chat/models
+        target: /app/models
+        read_only: true
+      - type: bind
+        source: ./instances/chat/local_agent_workspace
+        target: /app/local_agent
+        read_only: false
+    
+    # Chat-optimized environment
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/models/llama3-8b.gguf
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
+      - INSTANCE_NAME=chat
+      - MODEL_TYPE=llama3
+      - API_PORT=5000
+    
+    privileged: false
+    hostname: simplebrain-chat
+    restart: unless-stopped
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
+    
+    command: >
+      bash -c "
+        echo 'Starting SimpleBrain Chat Instance (Llama-3-8B)...';
+        cd /app/local_agent && python3 app.py
+      "
+
+# Isolated networks for each instance
+networks:
+  simplebrain-general-network:
+    driver: bridge
+    name: simplebrain-general-net
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.1.0/24
+
+  simplebrain-coding-network:
+    driver: bridge
+    name: simplebrain-coding-net
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.2.0/24
+
+  simplebrain-chat-network:
+    driver: bridge
+    name: simplebrain-chat-net
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.3.0/24

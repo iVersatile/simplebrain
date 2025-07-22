@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     libopenblas-dev \
     pkg-config \
+    make \
+    libcurl4-openssl-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -49,7 +51,23 @@ RUN python3 -m pip install --user --upgrade pip setuptools wheel \
 RUN mkdir -p /home/llmuser/projects \
     && mkdir -p /home/llmuser/workspace
 
+# Build llama.cpp during Docker build (as root, before switching to llmuser)
+WORKDIR /app/workspace
+RUN git clone https://github.com/ggerganov/llama.cpp.git \
+    && cd llama.cpp \
+    && mkdir build \
+    && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release \
+    && make -j$(nproc) \
+    && mkdir -p /app/workspace/projects/llama.cpp \
+    && cp /app/workspace/llama.cpp/build/bin/llama-cli /app/workspace/projects/llama.cpp/main \
+    && chown -R llmuser:llmuser /app/workspace
+
 WORKDIR /app
+
+# Copy startup script
+COPY --chown=llmuser:llmuser startup_simple.sh /app/startup.sh
+RUN chmod +x /app/startup.sh
 
 # Security: Use non-root user for runtime
 USER llmuser
